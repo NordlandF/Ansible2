@@ -107,7 +107,7 @@
       when: result is failed
       block:
 
-#Копирование конфига nginx при не рабочем сайте, или работающем на http протоколе
+#Копирование http настроек nginx
 
         - name: "Check or copy main nginx config"
           ansible.builtin.template:
