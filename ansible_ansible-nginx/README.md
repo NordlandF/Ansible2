@@ -6,7 +6,7 @@
 
 ## Cтруктура скачиваемого каталога
 
-```├── ansible.cfg
+```── ansible.cfg
 ├── my-playbooks
 │   ├── group_vars
 │   │   └── workserver.yaml
@@ -19,7 +19,7 @@
     │   └── nginx.j2
     └── site
         ├── file1.j2
-        └── file2.j2 ```
+        └── file2.j2```
 
 ## Первичная настройка
 
