@@ -1,0 +1,182 @@
+---
+- name: ansible - nginx
+  hosts: nord1
+  become: yes
+
+  tasks:
+
+#Проверка наличия или установка nginx
+
+    - name: "Check or install nginx"
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+      register: result
+
+#Блок основной настройки nginx
+
+    - name: "Install nginx"
+      when: result is changed
+      block:
+
+#Добавление nginx в автозапуск
+
+        - name: "Enabled nginx"
+          ansible.builtin.systemd_service:
+            name: nginx
+            enabled: true
+
+#Удаление дефолтных настроек (конфиг)
+
+        - name: "Delete default server"
+          ansible.builtin.file:
+            state: absent
+            path: /etc/nginx/sites-available/default
+
+#Удаление ссылки на дефолтные настройки (конфиг)
+
+        - name: "Delete link default server"
+          ansible.builtin.file:
+            state: absent
+            path: /etc/nginx/sites-enabled/default
+
+#Копирование настроек сайта для сертификата или проверка их наличия
+
+    - name: "Copy certificate content"
+      ansible.builtin.template:
+        src: "{{ path_to_site }}/file2.j2"
+        dest: "/var/www/{{ fullpath_for_certificate }}/txt2.html"
+        mode: '0755'
+      ignore_errors: yes
+      register: result
+
+#Блок настроек сайта
+
+    - name: "Configuration site"
+      when: result is failed
+      block:
+
+#Создание директории для сайта
+
+        - name: "Create website directory"
+          ansible.builtin.file:
+            path: "/var/www/{{ domain_name }}/.well-known/acme-challenge"
+            state: directory
+            mode: '0755'
+            recurse: yes
+
+#Копирование настроек сайта для главной страницы
+
+        - name: "Copy content nginx 1"
+          ansible.builtin.template:
+            src: "{{ path_to_site }}/file1.j2"
+            dest: "/var/www/{{ domain_name }}/txt1.html"
+            mode: '0644'
+
+#Копирование настроек сайта для сертификата
+
+        - name: "Copy content nginx 2"
+          ansible.builtin.template:
+            src: "{{ path_to_site }}/file2.j2"
+            dest: "/var/www/{{ domain_name }}/.well-known/acme-challenge/txt2.html"
+            mode: '0755'
+
+#Перезапуск nginx для работы сайта при внесеных изменениях
+
+        - name: "Restart nginx"
+          service:
+            name: nginx
+            state: reloaded
+          ignore_errors: true
+
+#Проверка работы сайта на https протоколе
+
+    - name: "Check port numbers are accessible from the current host"
+      ansible.builtin.wait_for:
+        host: "{{ domain_url }}"
+        port: 443
+        state: started
+        delay: 0
+        timeout: 3
+      ignore_errors: yes
+      register: result
+
+#Блок настроек конфига nginx
+
+    - name: "Configuration site"
+      when: result is failed
+      block:
+
+#Копирование конфига nginx при не рабочем сайте, или работающем на http протоколе
+
+        - name: "Check or copy main nginx config"
+          ansible.builtin.template:
+            src: "{{ path_to_cofgfile}}/nginx.j2"
+            dest: /etc/nginx/sites-enabled/nginx.conf
+            mode: '0644'
+
+#Перезапуск nginx для работы сайта при внесеных изменениях
+
+        - name: "Restart nginx"
+          service:
+            name: nginx
+            state: reloaded
+          ignore_errors: true
+
+#Выгрузка информации из сертификата (для получения информации о сроке использования или о его наличии в этой директории
+
+        - name: "Retrieve renewal information for a certificate"
+          community.crypto.acme_certificate_renewal_info:
+            acme_directory: https://acme-v02.api.letsencrypt.org/directory
+            acme_version: 2
+            certificate_path: "/etc/letsencrypt/live/{{ domain_url }}/cert.pem"
+          register: cert_data
+
+#Получения информации о сертификате или о его наличии в этой директории
+
+        - name: "Should the certificate be renewed?"
+          ansible.builtin.debug:
+            var: cert_data.should_renew
+
+#При отсутствии в директории сертификата запускается блок "Сертификация", в ином случае весь блок скипается
+
+        - name: "Sertification"
+          when: cert_data.should_renew is true
+          block:
+
+#Установка certbot
+
+            - name: "Install сertbot"
+              ansible.builtin.apt:
+                name: certbot
+                state: latest
+
+#Создание сертификата
+
+            - name: "Create LetsEncrypt Certificate"
+              shell: sudo certbot certonly -n --webroot -w /var/www/"{{ domain_name }}" -m "{{ letsencrypt_email }}" --agree-to -d "{{ domain_url }}"
+              args:
+                creates: /etc/letsencrypt/live/"{{ domain_url }}"
+
+#Еженедельное добавление сертификата в автообновление через crown
+
+            - name: "Add LetsEncrypt cronjob for Cert Renewal"
+              cron:
+                name: letsencrypt_renewal
+                special_time: weekly
+                job: certbot --renew certonly -n --webroot -w /var/www/"{{ domain_name }}" -m "{{ letsencrypt_email }}" --agree-to -d "{{ domain_url }}" && systemctl reload nginx
+
+#Редактирование конфига для работы на https
+
+            - name: "Redaction config nginx"
+              ansible.builtin.replace:
+                path: /etc/nginx/sites-enabled/nginx.conf
+                regexp: '#'
+                replace: ''
+
+#Финальный рестарт nginx
+
+            - name: restart nginx
+              service:
+                name: nginx
+                state: reloaded

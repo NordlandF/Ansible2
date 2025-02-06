@@ -1,0 +1,22 @@
+server {
+    listen *:80;
+#    listen *:443 ssl;
+    server_name {{ domain_url }} www.{{ domain_url }};
+#    ssl_certificate /etc/letsencrypt/live/{{ domain_url }}/fullchain.pem;
+#    ssl_certificate_key /etc/letsencrypt/live/{{ domain_url }}/privkey.pem;
+    root /var/www/{{ domain_name }};
+    index index.htm txt1.html txt2.html;
+#    if ($scheme = 'http') {
+#        return 301 https://$host$request_uri;
+#    }
+
+    location / {
+            try_files $uri $uri/ =404;
+    }
+
+    location /.well-known/acme-challenge {
+            alias /var/www/{{ domain_name }}/.well-known/acme-challenge;
+    }
+}
+
+

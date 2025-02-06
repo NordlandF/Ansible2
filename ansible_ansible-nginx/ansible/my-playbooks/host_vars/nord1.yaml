@@ -1,0 +1,6 @@
+---
+path_to_cofgfile: /home/nord/ansible/templates/conf
+path_to_site: /home/nord/ansible/templates/site
+domain_name: nord1.uberlegenheit
+domain_url: nord1.uberlegenheit.ru
+letsencrypt_email: sertimin@mail.ru
