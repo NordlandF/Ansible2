@@ -6,7 +6,7 @@
 
 ## Cтруктура скачиваемого каталога
 
-```── ansible.cfg
+|── ansible.cfg
 ├── my-playbooks
 │   ├── group_vars
 │   │   └── workserver.yaml
